@@ -10,6 +10,8 @@
 
 #define RX_PIN 1
 #define TX_PIN 2
+#define LEFT_DIAL_ADDRESS 1
+#define RIGHT_DIAL_ADDRESS 2
 
 CanFrame rxFrame;
 
@@ -27,6 +29,14 @@ struct {
   bool rear_heater = false;
 } climate;
 
+typedef struct {
+  uint8_t leftTemp;
+  bool dual;
+  bool dirty;
+  }
+LeftClimate;
+LeftClimate leftClimate;
+
 int minFanSpeed = 0;
 int maxFanSpeed = 8;
 int minTemp = 0;
@@ -34,7 +44,7 @@ int maxTemp = 31;
 
 const int PAGE_TIMEOUT = 10000;  // 10 seconds in milliseconds
 const int FUNCTION_CALL_INTERVAL = 800;
-const int SLAVE_CALL_INTERVAL = 100;
+const int SLAVE_CALL_INTERVAL = 500;
 
 unsigned long lastPageChange = 0;    // Stores timestamp of last page change
 unsigned long lastCanBroadcast = 0;  // Stores timestamp of last function call
@@ -89,7 +99,7 @@ void setup() {
   auto cfg = M5.config();
   M5Dial.begin(cfg, true, false);
   M5Dial.Display.setTextDatum(middle_center);
-  M5Dial.Display.setTextFont(&fonts::Font8);
+  M5Dial.Display.setTextFont(&fonts::Font6);
 
   Serial.begin(9600);
 
@@ -182,15 +192,21 @@ void loop() {
 }
 
 void readSlaveMessage() {
-  // Serial.println("readme");
-  Wire.requestFrom(3, 1);
+  // Wire.requestFrom(RIGHT_DIAL_ADDRESS, 1);
 
-  int x = Wire.read();
-  if (x != -1) {
-    climate.rightTemp = x;
+  // int x = Wire.read();
+  // if (x != -1) {
+  //   climate.rightTemp = x;
     
-    updatePage();
-  }
+  //   updatePage();
+  // }
+
+  Wire.requestFrom(LEFT_DIAL_ADDRESS, 16);
+  Wire.readBytes((byte*)&leftClimate, sizeof leftClimate);
+  Serial.print("LeftTemp ");
+  Serial.println(leftClimate.leftTemp);
+  Serial.print("Dual "); 
+  Serial.println(leftClimate.dual);
 }
 
 void updateCounter() {
@@ -246,7 +262,7 @@ void page0() {
     M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
     M5Dial.Display.setTextSize(2);
   } else {
-    M5Dial.Display.setTextFont(&fonts::Font7);
+    M5Dial.Display.setTextFont(&fonts::Font6);
     M5Dial.Display.setTextSize(2);
     offset = -10;
   }
@@ -280,7 +296,7 @@ void page1() {
   M5Dial.Display.setTextColor(ORANGE);
 
   if (climate.fanSpeed > 1) {
-    M5Dial.Display.setTextFont(&fonts::Font7);
+    M5Dial.Display.setTextFont(&fonts::Font6);
     M5Dial.Display.setTextSize(2);
     offset = -10;
   } else {
