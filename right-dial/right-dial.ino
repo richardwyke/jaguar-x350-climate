@@ -72,10 +72,12 @@ void updateCounter() {
   if (newPosition % 4 == 0 && std::abs(newPosition - lastUpdatePosition) >= 2) {
     lastUpdatePosition = newPosition;
 
-    change = (newPosition > oldPosition) ? 1 : -1;
-    localCentreClimate.fanSpeed = constrain(localCentreClimate.fanSpeed + change, minFanSpeed, maxFanSpeed);
-    Serial.println(localCentreClimate.fanSpeed);
-    localCentreClimate.dirty = true;
+    if (oldPosition != -999) {
+      change = (newPosition > oldPosition) ? 1 : -1;
+      localCentreClimate.fanSpeed = constrain(localCentreClimate.fanSpeed + change, minFanSpeed, maxFanSpeed);
+      Serial.println(localCentreClimate.fanSpeed);
+      localCentreClimate.dirty = true;
+    }
   }
 
   updatePage();
