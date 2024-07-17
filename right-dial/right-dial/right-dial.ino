@@ -9,25 +9,32 @@
 #include <string>
 
 /**
- * This is the main state of the climate which the right dial will
+ * The I2C address for this dial
+ */
+#define I2C_ADDRESS 0x06 
+
+/**
+ * This is the main state of the climate which the left dial will
  * receive from the center dial.
  */
 struct {
   bool on = true;
+  int rightTemp = 0;
 } climate;
 
 /**
- * The local state for this dial which is sent to the right dial.
+ * The local data for the dial
  */
-struct {
-  int rightTemp = 7;
-  bool dirty = true;
-} localClimate;
+struct LocalData {
+    int fanSpeed;
+    bool dirty;
+};
+LocalData localLeftClimate = {1, true};
 
-int minTemp = 0;
-int maxTemp = 31;
-unsigned long lastPageChange = 0;
-int PAGE = 0;
+// struct BroadcastClimateData {
+//   int rightTemp;
+// };
+// BroadcastClimateData broadcastClimate;
 
 long oldPosition = -999;
 long newPosition = 0;
@@ -37,13 +44,10 @@ void setup() {
   auto cfg = M5.config();
   M5Dial.begin(cfg, true, false);
   M5Dial.Display.setTextDatum(middle_center);
-  M5Dial.Display.setTextFont(&fonts::Font8);
 
-  Serial.begin(9600);
-  while(!Serial);
-
-  Wire.begin(3);
-  Wire.onRequest(requestEvent); 
+  Wire.begin(I2C_ADDRESS);
+  Wire.onRequest(sendData);
+  Wire.onReceive(receiveCommand);  
 }
 
 void loop() {
@@ -54,17 +58,25 @@ void loop() {
   if (newPosition != oldPosition) {
     updateCounter();
   }
+
+  /**
+  * Clicking the button resets the dual state
+  */
+  if (M5Dial.BtnA.wasPressed()) {
+    localLeftClimate.leftTemp = broadcastClimate.rightTemp;
+    localLeftClimate.dual = false;
+    localLeftClimate.dirty = true;
+    updatePage();
+  }
 }
 
 void updatePage() {
   // We only update the display if the data has been modified
-  if (localClimate.dirty) {
+  if (localLeftClimate.dirty) {
     M5Dial.Display.clear();
     page0();
-    localClimate.dirty = false;
+    localLeftClimate.dirty = false;
   }
-
-  lastPageChange = millis();
 }
 
 void updateCounter() {
@@ -78,8 +90,12 @@ void updateCounter() {
     }
 
     change = (newPosition > oldPosition) ? 2 : -2;
-    localClimate.rightTemp = constrain(localClimate.rightTemp + change, minTemp, maxTemp);
-    localClimate.dirty = true;
+    
+    if (oldPosition != -999) {
+      localLeftClimate.leftTemp = constrain(localLeftClimate.leftTemp + change, minTemp, maxTemp);
+      localLeftClimate.dual = true;
+      localLeftClimate.dirty = true;
+    }
   }
 
   updatePage();
@@ -92,7 +108,7 @@ void page0() {
 
   M5Dial.Display.setTextColor(ORANGE);
 
-  if (localClimate.rightTemp == 0 || localClimate.rightTemp == 31) {
+  if (localLeftClimate.leftTemp == 0 || localLeftClimate.leftTemp == 31) {
     M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
     M5Dial.Display.setTextSize(2);
   } else {
@@ -101,13 +117,13 @@ void page0() {
     offset = -10;
   }
 
-  String displayTemp = String(16 + (localClimate.rightTemp / 2));
+  String displayTemp = String(16 + (localLeftClimate.leftTemp / 2));
 
-  if (localClimate.rightTemp == 0) {
+  if (localLeftClimate.leftTemp == 0) {
     displayTemp = "Low";
   }
 
-  if (localClimate.rightTemp > 30) {
+  if (localLeftClimate.leftTemp > 30) {
     displayTemp = "High";
   }
 
@@ -116,17 +132,32 @@ void page0() {
     M5Dial.Display.width() / 2,
     M5Dial.Display.height() / 2 + offset);
 
+  String actionString = (localLeftClimate.dual) ? "Sync L" : "Temp L";
+
   M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
   M5Dial.Display.setTextSize(1);
   M5Dial.Display.drawString(
-    "Temp",
+    actionString,
     M5Dial.Display.width() / 2,
     M5Dial.Display.height() / 2 + 70);
 }
 
+void sendData() {
+  Wire.write((byte *)&localLeftClimate, sizeof(LocalData));
+}
+
 /**
- * Respond to the request event by sending the status of this dial
+ * Receive updated climate settings
  */
-void requestEvent() {
-  Wire.write(localClimate.rightTemp);
+void receiveCommand(int numBytes) {
+  if (Wire.available() == sizeof(BroadcastClimateData)) {
+      Wire.readBytes((byte *)&broadcastClimate, sizeof(BroadcastClimateData));
+
+      if (localLeftClimate.dual == false) {
+        localLeftClimate.leftTemp = broadcastClimate.rightTemp;
+        localLeftClimate.dirty = true;
+
+        updatePage();
+      }
+  }
 }

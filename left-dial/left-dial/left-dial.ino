@@ -9,6 +9,11 @@
 #include <string>
 
 /**
+ * The I2C address for this dial
+ */
+#define I2C_ADDRESS 0x08 
+
+/**
  * This is the main state of the climate which the left dial will
  * receive from the center dial.
  */
@@ -18,24 +23,22 @@ struct {
 } climate;
 
 /**
- * The local state for this dial which is sent to the right dial.
+ * The local data for the dial
  */
-struct {
-  int leftTemp = 0;
-  bool dual = false;
-  bool dirty = true;
-} localClimate;
+struct LocalData {
+    int leftTemp;
+    bool dual;
+    bool dirty;
+};
+LocalData localLeftClimate = {7, false, true};
 
-typedef struct {
-  uint8_t leftTemp;
-  bool dual;
-  bool dirty;
-  }
-LeftClimate;
-LeftClimate localLeftClimate;
+struct BroadcastClimateData {
+  int rightTemp;
+};
+BroadcastClimateData broadcastClimate;
 
-int minTemp = 0;
-int maxTemp = 31;
+int minTemp = 1;
+int maxTemp = 30;
 
 long oldPosition = -999;
 long newPosition = 0;
@@ -46,15 +49,9 @@ void setup() {
   M5Dial.begin(cfg, true, false);
   M5Dial.Display.setTextDatum(middle_center);
 
-  Serial.begin(9600);
-  while(!Serial);
-
-  Wire.begin(1);
-  Wire.onRequest(requestEvent); 
-
-  localLeftClimate.leftTemp = 6;
-  localLeftClimate.dual = false;
-  localLeftClimate.dirty = true;
+  Wire.begin(I2C_ADDRESS);
+  Wire.onRequest(sendData);
+  Wire.onReceive(receiveCommand);  
 }
 
 void loop() {
@@ -64,6 +61,16 @@ void loop() {
 
   if (newPosition != oldPosition) {
     updateCounter();
+  }
+
+  /**
+  * Clicking the button resets the dual state
+  */
+  if (M5Dial.BtnA.wasPressed()) {
+    localLeftClimate.leftTemp = broadcastClimate.rightTemp;
+    localLeftClimate.dual = false;
+    localLeftClimate.dirty = true;
+    updatePage();
   }
 }
 
@@ -88,9 +95,11 @@ void updateCounter() {
 
     change = (newPosition > oldPosition) ? 2 : -2;
     
-    localLeftClimate.leftTemp = constrain(localLeftClimate.leftTemp + change, minTemp, maxTemp);
-    localLeftClimate.dual = true;
-    localLeftClimate.dirty = true;
+    if (oldPosition != -999) {
+      localLeftClimate.leftTemp = constrain(localLeftClimate.leftTemp + change, minTemp, maxTemp);
+      localLeftClimate.dual = true;
+      localLeftClimate.dirty = true;
+    }
   }
 
   updatePage();
@@ -127,26 +136,32 @@ void page0() {
     M5Dial.Display.width() / 2,
     M5Dial.Display.height() / 2 + offset);
 
+  String actionString = (localLeftClimate.dual) ? "Sync L" : "Temp L";
+
   M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
   M5Dial.Display.setTextSize(1);
   M5Dial.Display.drawString(
-    "Temp",
+    actionString,
     M5Dial.Display.width() / 2,
     M5Dial.Display.height() / 2 + 70);
 }
 
-/**
- * Respond to the request event by sending the status of this dial
- */
-void requestEvent() {
-  Serial.println("Request event");
-
-  Wire.write((byte *)&localLeftClimate, sizeof localLeftClimate);
+void sendData() {
+  Wire.write((byte *)&localLeftClimate, sizeof(LocalData));
 }
 
 /**
  * Receive updated climate settings
  */
-void receiveEvent() {
+void receiveCommand(int numBytes) {
+  if (Wire.available() == sizeof(BroadcastClimateData)) {
+      Wire.readBytes((byte *)&broadcastClimate, sizeof(BroadcastClimateData));
 
+      if (localLeftClimate.dual == false) {
+        localLeftClimate.leftTemp = broadcastClimate.rightTemp;
+        localLeftClimate.dirty = true;
+
+        updatePage();
+      }
+  }
 }

@@ -10,8 +10,6 @@
 
 #define RX_PIN 1
 #define TX_PIN 2
-#define LEFT_DIAL_ADDRESS 1
-#define RIGHT_DIAL_ADDRESS 2
 
 CanFrame rxFrame;
 
@@ -29,13 +27,28 @@ struct {
   bool rear_heater = false;
 } climate;
 
-typedef struct {
-  uint8_t leftTemp;
-  bool dual;
-  bool dirty;
-  }
-LeftClimate;
-LeftClimate leftClimate;
+#define LEFT_SLAVE_ADDRESS 0x08
+struct LeftDialData {
+    int leftTemp;
+    bool dual;
+    bool dirty;
+};
+
+LeftDialData leftClimate;
+
+#define RIGHT_SLAVE_ADDRESS 0x06
+struct RightDialData {
+    int rightTemp;
+    bool dirty;
+};
+
+RightDialData rightClimate;
+
+struct BroadcastClimateData {
+  int rightTemp;
+};
+
+BroadcastClimateData broadcastClimateData;
 
 int minFanSpeed = 0;
 int maxFanSpeed = 8;
@@ -43,9 +56,11 @@ int minTemp = 0;
 int maxTemp = 31;
 
 const int PAGE_TIMEOUT = 10000;  // 10 seconds in milliseconds
+const int BROADCAST_INTERVAL = 2000;  // 10 seconds in milliseconds
 const int FUNCTION_CALL_INTERVAL = 800;
-const int SLAVE_CALL_INTERVAL = 500;
+const int SLAVE_CALL_INTERVAL = 200;
 
+unsigned long lastClimateBroadcast = 0;
 unsigned long lastPageChange = 0;    // Stores timestamp of last page change
 unsigned long lastCanBroadcast = 0;  // Stores timestamp of last function call
 unsigned long lastSlaveRead = 0;
@@ -56,6 +71,27 @@ long newPosition = 0;
 long lastUpdatePosition = -999;
 
 static m5::touch_state_t prev_state;
+
+void setup() {
+  auto cfg = M5.config();
+  M5Dial.begin(cfg, true, false);
+  M5Dial.Display.setTextDatum(middle_center);
+  M5Dial.Display.setTextFont(&fonts::Font6);
+
+  Serial.begin(9600);
+
+  ESP32Can.setPins(TX_PIN, RX_PIN);
+  ESP32Can.setSpeed(ESP32Can.convertSpeed(500));
+
+  // You can also just use .begin()..
+  if (ESP32Can.begin()) {
+    Serial.println("CAN bus started!");
+  } else {
+    Serial.println("CAN bus failed!");
+  }
+
+  Wire.begin();
+}
 
 std::string int_to_binary_string(int num, int i) {
   std::string binary_str;
@@ -95,27 +131,6 @@ int binary_string_to_int(std::string binary_str) {
   return decimal_value;
 }
 
-void setup() {
-  auto cfg = M5.config();
-  M5Dial.begin(cfg, true, false);
-  M5Dial.Display.setTextDatum(middle_center);
-  M5Dial.Display.setTextFont(&fonts::Font6);
-
-  Serial.begin(9600);
-
-  ESP32Can.setPins(TX_PIN, RX_PIN);
-  ESP32Can.setSpeed(ESP32Can.convertSpeed(500));
-
-  // You can also just use .begin()..
-  if (ESP32Can.begin()) {
-    Serial.println("CAN bus started!");
-  } else {
-    Serial.println("CAN bus failed!");
-  }
-
-  Wire.begin();
-}
-
 void loop() {
   M5Dial.update();
 
@@ -144,7 +159,7 @@ void loop() {
   }
 
   if (millis() - lastSlaveRead >= SLAVE_CALL_INTERVAL) {
-    readSlaveMessage();
+    readSlaveMessages();
 
     lastSlaveRead = millis();
   }
@@ -191,22 +206,22 @@ void loop() {
   }
 }
 
-void readSlaveMessage() {
-  // Wire.requestFrom(RIGHT_DIAL_ADDRESS, 1);
+void broadcastClimate() {
+  broadcastClimateData.rightTemp = climate.rightTemp;
 
-  // int x = Wire.read();
-  // if (x != -1) {
-  //   climate.rightTemp = x;
-    
-  //   updatePage();
-  // }
+  Wire.beginTransmission(LEFT_SLAVE_ADDRESS);  
+  Wire.write((byte *)&broadcastClimateData, sizeof(BroadcastClimateData));
+  Wire.endTransmission();
 
-  Wire.requestFrom(LEFT_DIAL_ADDRESS, 16);
-  Wire.readBytes((byte*)&leftClimate, sizeof leftClimate);
-  Serial.print("LeftTemp ");
-  Serial.println(leftClimate.leftTemp);
-  Serial.print("Dual "); 
-  Serial.println(leftClimate.dual);
+
+  lastClimateBroadcast = millis();
+}
+
+void readSlaveMessages() {
+  Wire.requestFrom(LEFT_SLAVE_ADDRESS, sizeof(LeftDialData)); 
+  if (Wire.available() == sizeof(LeftDialData)) {
+      Wire.readBytes((byte *)&leftClimate, sizeof(LeftDialData));
+  }
 }
 
 void updateCounter() {
@@ -222,6 +237,8 @@ void updateCounter() {
 
       change = (newPosition > oldPosition) ? 2 : -2;
       climate.rightTemp = constrain(climate.rightTemp + change, minTemp, maxTemp);
+
+      broadcastClimate();
     }
 
     if (PAGE % 3 == 1) {
