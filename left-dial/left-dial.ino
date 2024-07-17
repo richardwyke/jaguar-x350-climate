@@ -11,7 +11,7 @@
 /**
  * The I2C address for this dial
  */
-#define I2C_ADDRESS 0x06 
+#define I2C_ADDRESS 0x08 
 
 /**
  * This is the main state of the climate which the left dial will
@@ -26,15 +26,19 @@ struct {
  * The local data for the dial
  */
 struct LocalData {
-    int fanSpeed;
+    int leftTemp;
+    bool dual;
     bool dirty;
 };
-LocalData localLeftClimate = {1, true};
+LocalData localLeftClimate = {7, false, true};
 
-// struct BroadcastClimateData {
-//   int rightTemp;
-// };
-// BroadcastClimateData broadcastClimate;
+struct BroadcastClimateData {
+  int rightTemp;
+};
+BroadcastClimateData broadcastClimate;
+
+int minTemp = 1;
+int maxTemp = 30;
 
 long oldPosition = -999;
 long newPosition = 0;
@@ -108,14 +112,14 @@ void page0() {
 
   M5Dial.Display.setTextColor(ORANGE);
 
-  if (localLeftClimate.leftTemp == 0 || localLeftClimate.leftTemp == 31) {
+  // if (localLeftClimate.leftTemp == 0 || localLeftClimate.leftTemp == 31) {
     M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
     M5Dial.Display.setTextSize(2);
-  } else {
-    M5Dial.Display.setTextFont(&fonts::Font6);
-    M5Dial.Display.setTextSize(2);
-    offset = -10;
-  }
+  // } else {
+  //   M5Dial.Display.setTextFont(&fonts::Font6);
+  //   M5Dial.Display.setTextSize(2);
+  //   offset = -10;
+  // }
 
   String displayTemp = String(16 + (localLeftClimate.leftTemp / 2));
 
@@ -132,14 +136,14 @@ void page0() {
     M5Dial.Display.width() / 2,
     M5Dial.Display.height() / 2 + offset);
 
-  String actionString = (localLeftClimate.dual) ? "Sync L" : "Temp L";
-
-  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
-  M5Dial.Display.setTextSize(1);
-  M5Dial.Display.drawString(
-    actionString,
-    M5Dial.Display.width() / 2,
-    M5Dial.Display.height() / 2 + 70);
+  if (localLeftClimate.dual) {
+    M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
+    M5Dial.Display.setTextSize(1);
+    M5Dial.Display.drawString(
+      "Sync",
+      M5Dial.Display.width() / 2,
+      M5Dial.Display.height() / 2 + 80);
+  }
 }
 
 void sendData() {

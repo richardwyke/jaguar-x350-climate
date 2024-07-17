@@ -140,17 +140,17 @@ void loop() {
     updateCounter();
   }
 
-  /**
-    * Clicking the button changes the page
-    */
-  if (M5Dial.BtnA.wasPressed()) {
-    if (climate.fanSpeed == 0) {
-      PAGE = 1;
-    } else {
-      PAGE++;
-    }
-    updatePage();
-  }
+  // /**
+  //   * Clicking the button changes the page
+  //   */
+  // if (M5Dial.BtnA.wasPressed()) {
+  //   if (climate.fanSpeed == 0) {
+  //     PAGE = 1;
+  //   } else {
+  //     PAGE++;
+  //   }
+  //   updatePage();
+  // }
 
   if (millis() - lastCanBroadcast >= FUNCTION_CALL_INTERVAL) {
     sendCanMessage();
@@ -256,33 +256,30 @@ void updateCounter() {
 
 void updatePage() {
   M5Dial.Display.clear();
-  if (PAGE % 3 == 0) {
+  // if (PAGE % 3 == 0) {
     page0();
-  }
+  // }
 
-  if (PAGE % 3 == 1) {
-    page1();
-  }
+  // if (PAGE % 3 == 1) {
+  //   page1();
+  // }
 
-  if (PAGE % 3 == 2) {
-    page2();
-  }
+  // if (PAGE % 3 == 2) {
+  //   page2();
+  // }
 
   lastPageChange = millis();
 }
 
 void page0() {
-  int offset = 0;
-
   M5Dial.Display.setTextColor(ORANGE);
-  if (climate.rightTemp == 0 || climate.rightTemp == 31) {
+  // if (climate.rightTemp == 0 || climate.rightTemp == 31) {
     M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
     M5Dial.Display.setTextSize(2);
-  } else {
-    M5Dial.Display.setTextFont(&fonts::Font6);
-    M5Dial.Display.setTextSize(2);
-    offset = -10;
-  }
+  // } else {
+  //   M5Dial.Display.setTextFont(&fonts::Font6);
+  //   M5Dial.Display.setTextSize(2);
+  // }
 
   String displayTemp = String(16 + (climate.rightTemp / 2));
 
@@ -297,41 +294,7 @@ void page0() {
   M5Dial.Display.drawString(
     String(displayTemp),
     M5Dial.Display.width() / 2,
-    M5Dial.Display.height() / 2 + offset);
-
-  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
-  M5Dial.Display.setTextSize(1);
-  M5Dial.Display.drawString(
-    "Temp",
-    M5Dial.Display.width() / 2,
-    M5Dial.Display.height() / 2 + 70);
-}
-
-void page1() {
-  int offset = 0;
-
-  M5Dial.Display.setTextColor(ORANGE);
-
-  if (climate.fanSpeed > 1) {
-    M5Dial.Display.setTextFont(&fonts::Font6);
-    M5Dial.Display.setTextSize(2);
-    offset = -10;
-  } else {
-    M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
-    M5Dial.Display.setTextSize(2);
-  }
-
-  M5Dial.Display.drawString(
-    getFanSpeedText(),
-    M5Dial.Display.width() / 2,
-    M5Dial.Display.height() / 2 + offset);
-
-  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
-  M5Dial.Display.setTextSize(1);
-  M5Dial.Display.drawString(
-    "Fan Speed",
-    M5Dial.Display.width() / 2,
-    M5Dial.Display.height() / 2 + 70);
+    M5Dial.Display.height() / 2);
 }
 
 void page2() {
