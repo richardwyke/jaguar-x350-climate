@@ -1,11 +1,15 @@
+/**
+ * The centre dial is responsible for the canbus communication with the car, and
+ * shows the controls for the fan speed and the vent location, as well as the
+ * display of the exterior temperature.
+ */
 #include "M5Dial.h"
 #include "ESP32-TWAI-CAN.hpp"
 #include <string>
+#include <Wire.h>
 
 #define RX_PIN 1
 #define TX_PIN 2
-
-#define POLLING_RATE_MS 1000
 
 CanFrame rxFrame;
 
@@ -23,20 +27,25 @@ struct {
   bool rear_heater = false;
 } climate;
 
-int minFanSpeed = 1;
+int minFanSpeed = 0;
 int maxFanSpeed = 8;
 int minTemp = 0;
 int maxTemp = 31;
 
 const int PAGE_TIMEOUT = 10000;  // 10 seconds in milliseconds
 const int FUNCTION_CALL_INTERVAL = 800;
+const int SLAVE_CALL_INTERVAL = 100;
+
 unsigned long lastPageChange = 0;    // Stores timestamp of last page change
 unsigned long lastCanBroadcast = 0;  // Stores timestamp of last function call
+unsigned long lastSlaveRead = 0;
 int PAGE = 0;
 
 long oldPosition = -999;
 long newPosition = 0;
 long lastUpdatePosition = -999;
+
+static m5::touch_state_t prev_state;
 
 std::string int_to_binary_string(int num, int i) {
   std::string binary_str;
@@ -79,7 +88,6 @@ int binary_string_to_int(std::string binary_str) {
 void setup() {
   auto cfg = M5.config();
   M5Dial.begin(cfg, true, false);
-  M5Dial.Display.setTextColor(ORANGE);
   M5Dial.Display.setTextDatum(middle_center);
   M5Dial.Display.setTextFont(&fonts::Font8);
 
@@ -94,6 +102,8 @@ void setup() {
   } else {
     Serial.println("CAN bus failed!");
   }
+
+  Wire.begin();
 }
 
 void loop() {
@@ -119,11 +129,66 @@ void loop() {
 
   if (millis() - lastCanBroadcast >= FUNCTION_CALL_INTERVAL) {
     sendCanMessage();
+
     lastCanBroadcast = millis();
+  }
+
+  if (millis() - lastSlaveRead >= SLAVE_CALL_INTERVAL) {
+    readSlaveMessage();
+
+    lastSlaveRead = millis();
   }
 
   if (millis() - lastPageChange > PAGE_TIMEOUT && PAGE != 0 && climate.fanSpeed != 0) {
     PAGE = 0;
+    updatePage();
+  }
+
+  if (PAGE % 3 == 2) {
+    bool click_left;
+    bool click_top;
+
+    auto t = M5Dial.Touch.getDetail();
+    if (prev_state != t.state) {
+      prev_state = t.state;
+      static constexpr const char* state_name[16] = {
+        "none", "touch", "touch_end", "touch_begin",
+        "___", "hold", "hold_end", "hold_begin",
+        "___", "flick", "flick_end", "flick_begin",
+        "___", "drag", "drag_end", "drag_begin"
+      };
+
+      if (state_name[t.state] == "none") {
+
+        click_left = (t.x <= 120);
+        click_top = (t.y <= 120);
+
+        if (click_left && click_top) {
+          climate.front_heater = !climate.front_heater;
+        }
+
+        if (!click_left && click_top) {
+          climate.rear_heater = !climate.rear_heater;
+        }
+
+        if (click_left && !click_top) {
+          climate.timed_recirc = !climate.timed_recirc;
+        }
+
+        updatePage();
+      }
+    }
+  }
+}
+
+void readSlaveMessage() {
+  // Serial.println("readme");
+  Wire.requestFrom(3, 1);
+
+  int x = Wire.read();
+  if (x != -1) {
+    climate.rightTemp = x;
+    
     updatePage();
   }
 }
@@ -134,7 +199,7 @@ void updateCounter() {
   if (newPosition % 4 == 0 && std::abs(newPosition - lastUpdatePosition) >= 2) {
     lastUpdatePosition = newPosition;
 
-    if (PAGE % 2 == 0) {
+    if (PAGE % 3 == 0) {
       if (climate.fanSpeed == 0) {
         return;
       }
@@ -143,12 +208,14 @@ void updateCounter() {
       climate.rightTemp = constrain(climate.rightTemp + change, minTemp, maxTemp);
     }
 
-    if (PAGE % 2 == 1) {
+    if (PAGE % 3 == 1) {
       change = (newPosition > oldPosition) ? 1 : -1;
       climate.fanSpeed = constrain(climate.fanSpeed + change, minFanSpeed, maxFanSpeed);
     }
 
-    updatePage();
+    if (PAGE % 3 != 2) {
+      updatePage();
+    }
   }
 
   oldPosition = newPosition;
@@ -156,12 +223,16 @@ void updateCounter() {
 
 void updatePage() {
   M5Dial.Display.clear();
-  if (PAGE % 2 == 0) {
+  if (PAGE % 3 == 0) {
     page0();
   }
 
-  if (PAGE % 2 == 1) {
+  if (PAGE % 3 == 1) {
     page1();
+  }
+
+  if (PAGE % 3 == 2) {
+    page2();
   }
 
   lastPageChange = millis();
@@ -169,6 +240,8 @@ void updatePage() {
 
 void page0() {
   int offset = 0;
+
+  M5Dial.Display.setTextColor(ORANGE);
   if (climate.rightTemp == 0 || climate.rightTemp == 31) {
     M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
     M5Dial.Display.setTextSize(2);
@@ -203,6 +276,9 @@ void page0() {
 
 void page1() {
   int offset = 0;
+
+  M5Dial.Display.setTextColor(ORANGE);
+
   if (climate.fanSpeed > 1) {
     M5Dial.Display.setTextFont(&fonts::Font7);
     M5Dial.Display.setTextSize(2);
@@ -225,6 +301,37 @@ void page1() {
     M5Dial.Display.height() / 2 + 70);
 }
 
+void page2() {
+  M5Dial.Display.setTextFont(&fonts::FreeMonoBold24pt7b);
+
+  M5Dial.Display.setTextColor(DARKGREY);
+  if (climate.front_heater) {
+    M5Dial.Display.setTextColor(ORANGE);
+  }
+  M5Dial.Display.drawString(
+    "F",
+    (M5Dial.Display.width() / 4) + 20,
+    (M5Dial.Display.height() / 4) + 10);
+
+  M5Dial.Display.setTextColor(DARKGREY);
+  if (climate.rear_heater) {
+    M5Dial.Display.setTextColor(ORANGE);
+  }
+  M5Dial.Display.drawString(
+    "R",
+    (M5Dial.Display.width() / 4 * 3) - 20,
+    (M5Dial.Display.height() / 4) + 10);
+
+  M5Dial.Display.setTextColor(DARKGREY);
+  if (climate.timed_recirc) {
+    M5Dial.Display.setTextColor(ORANGE);
+  }
+  M5Dial.Display.drawString(
+    "RC",
+    (M5Dial.Display.width() / 4) + 20,
+    (M5Dial.Display.height() / 4 * 3) - 10);
+}
+
 void sendCanMessage() {
   CanFrame obdFrame = { 0 };
   obdFrame.identifier = 0x696;
@@ -241,7 +348,7 @@ void sendCanMessage() {
 
   ESP32Can.writeFrame(obdFrame, 0);
 
-  Serial.println("ESP32Can.writeFrame: " + String(obdFrame.data[0]) + ":" + String(obdFrame.data[1]) + ":" + String(obdFrame.data[2]) + ":" + String(obdFrame.data[3]) + ":" + String(obdFrame.data[4]) + ":" + String(obdFrame.data[5]) + ":" + String(obdFrame.data[6]) + ":" + String(obdFrame.data[7]));
+  // Serial.println("ESP32Can.writeFrame: " + String(obdFrame.data[0]) + ":" + String(obdFrame.data[1]) + ":" + String(obdFrame.data[2]) + ":" + String(obdFrame.data[3]) + ":" + String(obdFrame.data[4]) + ":" + String(obdFrame.data[5]) + ":" + String(obdFrame.data[6]) + ":" + String(obdFrame.data[7]));
 }
 
 int getPart1() {
@@ -253,8 +360,8 @@ int getPart1() {
     Part1 += "0" + int_to_binary_string(climate.fanSpeed - 1, 3);
   }
 
-  Serial.println("Part1:");
-  Serial.println(Part1.c_str());
+  // Serial.println("Part1:");
+  // Serial.println(Part1.c_str());
 
   return binary_string_to_int(Part1);
 }
@@ -265,8 +372,8 @@ int getPart2() {
 
   Part2 = Part2 + int_to_binary_string(temp, 5);
 
-  Serial.println("Part2:");
-  Serial.println(Part2.c_str());
+  // Serial.println("Part2:");
+  // Serial.println(Part2.c_str());
 
   return binary_string_to_int(Part2);
 }
@@ -280,8 +387,8 @@ int getPart3() {
 
   Part3 += int_to_binary_string(temp, 5);
 
-  Serial.println("Part3:");
-  Serial.println(Part3.c_str());
+  // Serial.println("Part3:");
+  // Serial.println(Part3.c_str());
 
   return binary_string_to_int(Part3.c_str());
 }
@@ -294,8 +401,8 @@ int getPart4() {
   Part4 += (climate.front_heater) ? "1" : "0";
   Part4 += (climate.rear_heater) ? "1" : "0";
 
-  Serial.println("Part4:");
-  Serial.println(Part4.c_str());
+  // Serial.println("Part4:");
+  // Serial.println(Part4.c_str());
 
   return binary_string_to_int(Part4);
 }
