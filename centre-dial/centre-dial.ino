@@ -1,9 +1,6 @@
 /**
- * The Right dial is responsible for controlling the right temperature,
- * as well as the settings for heated front & rear screens, defrost, 
- * and air recirculation and air conditioning.
+ * The centre dial is responsible for the fan speed, vent position, and other options
  */
-
 #include <Wire.h>
 #include "M5Dial.h"
 #include <string>
@@ -17,25 +14,36 @@
  * The local data for the dial
  */
 struct LocalData {
-    int fanSpeed;
-    bool dirty;
+  bool on;
+  int fanSpeed;
+  int ventPosition;
+  bool timed_recirc;
+  bool defrost;
+  bool front_heater;
+  bool rear_heater;
+  bool dirty;
 };
-LocalData localCentreClimate = {1, true};
+LocalData localData = {true, 1, 1, false, false, false, false, true};
 
-// struct BroadcastClimateData {
-//   int rightTemp;
-// };
-// BroadcastClimateData broadcastClimate;
-
+// Dial position
 long oldPosition = -999;
 long newPosition = 0;
 long lastUpdatePosition = -999;
 
+// The active page shown on the dial
+int PAGE = 0;
+int lastPageChange = 0;
+int PAGE_TIMEOUT = 10000;
+
+// Constants that define the maximum and minimum values for the dial
 int minFanSpeed = 0;
 int maxFanSpeed = 8;
+int minVentPosition = 1;
+int maxVentPosition = 6;
 
 void setup() {
   auto cfg = M5.config();
+
   M5Dial.begin(cfg, true, false);
   M5Dial.Display.setTextDatum(middle_center);
 
@@ -51,18 +59,89 @@ void loop() {
 
   newPosition = M5Dial.Encoder.read();
 
+  /*
+   * Turning the encoder increments or decrements, depending on the page you're on
+   */
   if (newPosition != oldPosition) {
     updateCounter();
-    Serial.println("Update");
   }
+
+  /**
+    * Clicking the button changes the page
+    */
+  if (M5Dial.BtnA.wasPressed()) {
+    /**
+     * If the climate is turned off, pressing the button should do nothing
+     */
+    if (localData.fanSpeed == 0) {
+      return;
+    }
+
+    page++;
+  }
+
+  if (millis() - lastPageChange > PAGE_TIMEOUT && PAGE != 00) {
+    PAGE = 0;
+  }
+  
+  updatePage();
 }
 
 void updatePage() {
   // We only update the display if the data has been modified
-  if (localCentreClimate.dirty) {
+  if (localData.dirty) {
     M5Dial.Display.clear();
-    page0();
-    localCentreClimate.dirty = false;
+
+    if (PAGE % 3 == 0) {
+      page0();
+    }
+
+    if (PAGE % 3 == 1) {
+      page1();
+    }
+
+    if (PAGE % 3 == 2) {
+      page2();
+    }
+
+    localData.dirty = false;
+    lastPageChange = millis();
+  }
+}
+
+void handleTouch() {
+  bool click_left;
+  bool click_top;
+
+  auto t = M5Dial.Touch.getDetail();
+  if (prev_state != t.state) {
+    prev_state = t.state;
+    static constexpr const char* state_name[16] = {
+      "none", "touch", "touch_end", "touch_begin",
+      "___", "hold", "hold_end", "hold_begin",
+      "___", "flick", "flick_end", "flick_begin",
+      "___", "drag", "drag_end", "drag_begin"
+    };
+
+    if (state_name[t.state] == "none") {
+
+      click_left = (t.x <= 120);
+      click_top = (t.y <= 120);
+
+      if (click_left && click_top) {
+        localData.front_heater = !localData.front_heater;
+      }
+
+      if (!click_left && click_top) {
+        localData.rear_heater = !localData.rear_heater;
+      }
+
+      if (click_left && !click_top) {
+        localData.timed_recirc = !localData.timed_recirc;
+      }
+
+      localData.dirty = true;
+    }
   }
 }
 
@@ -73,74 +152,112 @@ void updateCounter() {
     lastUpdatePosition = newPosition;
 
     if (oldPosition != -999) {
-      change = (newPosition > oldPosition) ? 1 : -1;
-      localCentreClimate.fanSpeed = constrain(localCentreClimate.fanSpeed + change, minFanSpeed, maxFanSpeed);
-      Serial.println(localCentreClimate.fanSpeed);
-      localCentreClimate.dirty = true;
+      localData.dirty = true;
+
+      if (PAGE % 3 == 0) {
+        change = (newPosition > oldPosition) ? 1 : -1;
+        localData.fanSpeed = constrain(localData.fanSpeed + change, minFanSpeed, maxFanSpeed);
+        Serial.println(localData.fanSpeed);
+      }
+
+      if (PAGE % 3 == 1) {
+        change = (newPosition > oldPosition) ? 1 : -1;
+        localData.ventPosition = constrain(localData.ventPosition + change, minVentPosition, maxVentPosition);
+        Serial.println(localData.fanSpeed);
+      }
     }
   }
-
-  updatePage();
 
   oldPosition = newPosition;
 }
 
+/**
+ * Fan speed
+ */
 void page0() {
-  int offset = 0;
-
   M5Dial.Display.setTextColor(ORANGE);
 
-  // if (localCentreClimate.fanSpeed > 1) {
-  //   M5Dial.Display.setTextFont(&fonts::Font6);
-  //   M5Dial.Display.setTextSize(2);
-  //   offset = -10;
-  // } else {
-    M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
-    M5Dial.Display.setTextSize(2);
-  // }
+  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
+  M5Dial.Display.setTextSize(2);
 
   M5Dial.Display.drawString(
     getFanSpeedText(),
     M5Dial.Display.width() / 2,
-    M5Dial.Display.height() / 2 + offset);
+    M5Dial.Display.height() / 2
+  );
+}
 
-  // M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
-  // M5Dial.Display.setTextSize(1);
-  // M5Dial.Display.drawString(
-  //   "Fan Speed",
-  //   M5Dial.Display.width() / 2,
-  //   M5Dial.Display.height() / 2 + 70);
+/**
+ * Vent position
+ */
+void page1() {
+  M5Dial.Display.setTextColor(ORANGE);
+
+  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
+  M5Dial.Display.setTextSize(2);
+
+  M5Dial.Display.drawString(
+    getVentPosition(),
+    M5Dial.Display.width() / 2,
+    M5Dial.Display.height() / 2
+  );
+}
+
+/**
+ * Buttons
+ */
+void page2() {
+  M5Dial.Display.setTextFont(&fonts::FreeMonoBold24pt7b);
+
+  M5Dial.Display.setTextColor(DARKGREY);
+  if (localData.front_heater) {
+    M5Dial.Display.setTextColor(ORANGE);
+  }
+  M5Dial.Display.drawString(
+    "F",
+    (M5Dial.Display.width() / 4) + 20,
+    (M5Dial.Display.height() / 4) + 10);
+
+  M5Dial.Display.setTextColor(DARKGREY);
+  if (localData.rear_heater) {
+    M5Dial.Display.setTextColor(ORANGE);
+  }
+  M5Dial.Display.drawString(
+    "R",
+    (M5Dial.Display.width() / 4 * 3) - 20,
+    (M5Dial.Display.height() / 4) + 10);
+
+  M5Dial.Display.setTextColor(DARKGREY);
+  if (localData.timed_recirc) {
+    M5Dial.Display.setTextColor(ORANGE);
+  }
+  M5Dial.Display.drawString(
+    "RC",
+    (M5Dial.Display.width() / 4) + 20,
+    (M5Dial.Display.height() / 4 * 3) - 10);
 }
 
 String getFanSpeedText() {
   String displayTemp = "Off";
 
-  if (localCentreClimate.fanSpeed == 1) {
+  if (localData.fanSpeed == 1) {
     displayTemp = "Auto";
   }
 
-  if (localCentreClimate.fanSpeed > 1) {
-    displayTemp = String(localCentreClimate.fanSpeed - 1);
+  if (localData.fanSpeed > 1) {
+    displayTemp = String(localData.fanSpeed - 1);
   }
+
   return displayTemp;
 }
 
-void sendData() {
-  Wire.write((byte *)&localCentreClimate, sizeof(LocalData));
+String getVentPosition() {
+  return String(localData.ventPosition);
 }
 
 /**
- * Receive updated climate settings
+ * Send the local data back to the main dial
  */
-void receiveCommand(int numBytes) {
-  // if (Wire.available() == sizeof(BroadcastClimateData)) {
-  //     Wire.readBytes((byte *)&broadcastClimate, sizeof(BroadcastClimateData));
-
-  //     if (localLeftClimate.dual == false) {
-  //       localLeftClimate.leftTemp = broadcastClimate.rightTemp;
-  //       localLeftClimate.dirty = true;
-
-  //       updatePage();
-  //     }
-  // }
+void sendData() {
+  Wire.write((byte *)&localData, sizeof(LocalData));
 }

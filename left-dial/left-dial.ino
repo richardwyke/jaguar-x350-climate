@@ -34,6 +34,7 @@ LocalData localLeftClimate = {7, false, true};
 
 struct BroadcastClimateData {
   int rightTemp;
+  int fanSpeed;
 };
 BroadcastClimateData broadcastClimate;
 
@@ -108,33 +109,28 @@ void updateCounter() {
 }
 
 void page0() {
-  int offset = 0;
+  if (broadcastClimate.fanSpeed == 0) {
+    return;
+  }
 
   M5Dial.Display.setTextColor(ORANGE);
-
-  // if (localLeftClimate.leftTemp == 0 || localLeftClimate.leftTemp == 31) {
-    M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
-    M5Dial.Display.setTextSize(2);
-  // } else {
-  //   M5Dial.Display.setTextFont(&fonts::Font6);
-  //   M5Dial.Display.setTextSize(2);
-  //   offset = -10;
-  // }
+  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
+  M5Dial.Display.setTextSize(2);
 
   String displayTemp = String(16 + (localLeftClimate.leftTemp / 2));
 
   if (localLeftClimate.leftTemp == 0) {
-    displayTemp = "Low";
+    displayTemp = "Lo";
   }
 
   if (localLeftClimate.leftTemp > 30) {
-    displayTemp = "High";
+    displayTemp = "Hi";
   }
 
   M5Dial.Display.drawString(
     String(displayTemp),
     M5Dial.Display.width() / 2,
-    M5Dial.Display.height() / 2 + offset);
+    M5Dial.Display.height() / 2);
 
   if (localLeftClimate.dual) {
     M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);

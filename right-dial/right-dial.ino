@@ -19,12 +19,13 @@ struct {
   int leftTemp = 7;
   int rightTemp = 7;
   bool dual = false;
-  int vents = 6;
+  int ventPosition = 6;
   bool auto_recirc = false;
   bool timed_recirc = false;
   bool defrost = false;
   bool front_heater = false;
   bool rear_heater = false;
+  bool dirty = true;
 } climate;
 
 #define LEFT_SLAVE_ADDRESS 0x08
@@ -36,16 +37,22 @@ struct LeftDialData {
 
 LeftDialData leftClimate;
 
-#define RIGHT_SLAVE_ADDRESS 0x06
-struct RightDialData {
-    int rightTemp;
-    bool dirty;
-};
-
-RightDialData rightClimate;
+#define CENTRE_SLAVE_ADDRESS 0x06
+struct CentreDialData {
+  bool on;
+  int fanSpeed;
+  int ventPosition;
+  bool timed_recirc;
+  bool defrost;
+  bool front_heater;
+  bool rear_heater;
+  bool dirty;
+};;
+CentreDialData centreClimate;
 
 struct BroadcastClimateData {
   int rightTemp;
+  int fanSpeed;
 };
 
 BroadcastClimateData broadcastClimateData;
@@ -140,18 +147,6 @@ void loop() {
     updateCounter();
   }
 
-  // /**
-  //   * Clicking the button changes the page
-  //   */
-  // if (M5Dial.BtnA.wasPressed()) {
-  //   if (climate.fanSpeed == 0) {
-  //     PAGE = 1;
-  //   } else {
-  //     PAGE++;
-  //   }
-  //   updatePage();
-  // }
-
   if (millis() - lastCanBroadcast >= FUNCTION_CALL_INTERVAL) {
     sendCanMessage();
 
@@ -163,47 +158,6 @@ void loop() {
 
     lastSlaveRead = millis();
   }
-
-  if (millis() - lastPageChange > PAGE_TIMEOUT && PAGE != 0 && climate.fanSpeed != 0) {
-    PAGE = 0;
-    updatePage();
-  }
-
-  if (PAGE % 3 == 2) {
-    bool click_left;
-    bool click_top;
-
-    auto t = M5Dial.Touch.getDetail();
-    if (prev_state != t.state) {
-      prev_state = t.state;
-      static constexpr const char* state_name[16] = {
-        "none", "touch", "touch_end", "touch_begin",
-        "___", "hold", "hold_end", "hold_begin",
-        "___", "flick", "flick_end", "flick_begin",
-        "___", "drag", "drag_end", "drag_begin"
-      };
-
-      if (state_name[t.state] == "none") {
-
-        click_left = (t.x <= 120);
-        click_top = (t.y <= 120);
-
-        if (click_left && click_top) {
-          climate.front_heater = !climate.front_heater;
-        }
-
-        if (!click_left && click_top) {
-          climate.rear_heater = !climate.rear_heater;
-        }
-
-        if (click_left && !click_top) {
-          climate.timed_recirc = !climate.timed_recirc;
-        }
-
-        updatePage();
-      }
-    }
-  }
 }
 
 void broadcastClimate() {
@@ -213,7 +167,6 @@ void broadcastClimate() {
   Wire.write((byte *)&broadcastClimateData, sizeof(BroadcastClimateData));
   Wire.endTransmission();
 
-
   lastClimateBroadcast = millis();
 }
 
@@ -221,6 +174,31 @@ void readSlaveMessages() {
   Wire.requestFrom(LEFT_SLAVE_ADDRESS, sizeof(LeftDialData)); 
   if (Wire.available() == sizeof(LeftDialData)) {
       Wire.readBytes((byte *)&leftClimate, sizeof(LeftDialData));
+  }
+
+  Wire.requestFrom(CENTRE_SLAVE_ADDRESS, sizeof(CentreDialData)); 
+  if (Wire.available() == sizeof(CentreDialData)) {
+      Wire.readBytes((byte *)&centreClimate, sizeof(CentreDialData));
+  }
+
+  syncDialState();
+}
+
+void syncDialState() {
+  if (climate.fanSpeed != centreClimate.fanSpeed) {
+    climate.fanSpeed = centreClimate.fanSpeed;
+    climate.dirty = true;
+    broadcastClimate();
+  }
+
+  climate.ventPosition = centreClimate.ventPosition;
+  climate.front_heater = centreClimate.front_heater;
+  climate.rear_heater = centreClimate.rear_heater;
+  climate.dual = centreClimate.dual;
+  if (climate.dual) {
+    climate.leftTemp = leftClimate.leftTemp;
+  } else {
+    climate.leftTemp = climate.rightTemp;
   }
 }
 
@@ -241,14 +219,7 @@ void updateCounter() {
       broadcastClimate();
     }
 
-    if (PAGE % 3 == 1) {
-      change = (newPosition > oldPosition) ? 1 : -1;
-      climate.fanSpeed = constrain(climate.fanSpeed + change, minFanSpeed, maxFanSpeed);
-    }
-
-    if (PAGE % 3 != 2) {
-      updatePage();
-    }
+    updatePage();
   }
 
   oldPosition = newPosition;
@@ -256,76 +227,37 @@ void updateCounter() {
 
 void updatePage() {
   M5Dial.Display.clear();
-  // if (PAGE % 3 == 0) {
-    page0();
-  // }
 
-  // if (PAGE % 3 == 1) {
-  //   page1();
-  // }
-
-  // if (PAGE % 3 == 2) {
-  //   page2();
-  // }
-
-  lastPageChange = millis();
+  page0();
 }
 
 void page0() {
+  /**
+   * We don't show anything if the system is off
+   */
+  if (climate.fanSpeed == 0) {
+    return;
+  }
+
   M5Dial.Display.setTextColor(ORANGE);
-  // if (climate.rightTemp == 0 || climate.rightTemp == 31) {
-    M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
-    M5Dial.Display.setTextSize(2);
-  // } else {
-  //   M5Dial.Display.setTextFont(&fonts::Font6);
-  //   M5Dial.Display.setTextSize(2);
-  // }
+  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
+  M5Dial.Display.setTextSize(2);
 
   String displayTemp = String(16 + (climate.rightTemp / 2));
 
   if (climate.rightTemp == 0) {
-    displayTemp = "Low";
+    displayTemp = "Lo";
   }
 
   if (climate.rightTemp > 30) {
-    displayTemp = "High";
+    displayTemp = "Hi";
   }
 
   M5Dial.Display.drawString(
     String(displayTemp),
     M5Dial.Display.width() / 2,
-    M5Dial.Display.height() / 2);
-}
-
-void page2() {
-  M5Dial.Display.setTextFont(&fonts::FreeMonoBold24pt7b);
-
-  M5Dial.Display.setTextColor(DARKGREY);
-  if (climate.front_heater) {
-    M5Dial.Display.setTextColor(ORANGE);
-  }
-  M5Dial.Display.drawString(
-    "F",
-    (M5Dial.Display.width() / 4) + 20,
-    (M5Dial.Display.height() / 4) + 10);
-
-  M5Dial.Display.setTextColor(DARKGREY);
-  if (climate.rear_heater) {
-    M5Dial.Display.setTextColor(ORANGE);
-  }
-  M5Dial.Display.drawString(
-    "R",
-    (M5Dial.Display.width() / 4 * 3) - 20,
-    (M5Dial.Display.height() / 4) + 10);
-
-  M5Dial.Display.setTextColor(DARKGREY);
-  if (climate.timed_recirc) {
-    M5Dial.Display.setTextColor(ORANGE);
-  }
-  M5Dial.Display.drawString(
-    "RC",
-    (M5Dial.Display.width() / 4) + 20,
-    (M5Dial.Display.height() / 4 * 3) - 10);
+    M5Dial.Display.height() / 2
+  );
 }
 
 void sendCanMessage() {
@@ -401,17 +333,4 @@ int getPart4() {
   // Serial.println(Part4.c_str());
 
   return binary_string_to_int(Part4);
-}
-
-String getFanSpeedText() {
-  String displayTemp = "Off";
-
-  if (climate.fanSpeed == 1) {
-    displayTemp = "Auto";
-  }
-
-  if (climate.fanSpeed > 1) {
-    displayTemp = String(climate.fanSpeed - 1);
-  }
-  return displayTemp;
 }
