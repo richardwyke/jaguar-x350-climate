@@ -36,7 +36,7 @@ struct BroadcastClimateData {
   int rightTemp;
   int fanSpeed;
 };
-BroadcastClimateData broadcastClimate;
+BroadcastClimateData broadcastClimate = {8, 1};
 
 int minTemp = 1;
 int maxTemp = 30;
@@ -49,6 +49,8 @@ void setup() {
   auto cfg = M5.config();
   M5Dial.begin(cfg, true, false);
   M5Dial.Display.setTextDatum(middle_center);
+
+  Serial.begin(9600);
 
   Wire.begin(I2C_ADDRESS);
   Wire.onRequest(sendData);
@@ -109,7 +111,11 @@ void updateCounter() {
 }
 
 void page0() {
+  Serial.print("Broadcast");
+  Serial.println(broadcastClimate.fanSpeed);
+
   if (broadcastClimate.fanSpeed == 0) {
+    M5Dial.Display.clear();
     return;
   }
 
@@ -155,9 +161,9 @@ void receiveCommand(int numBytes) {
 
       if (localLeftClimate.dual == false) {
         localLeftClimate.leftTemp = broadcastClimate.rightTemp;
-        localLeftClimate.dirty = true;
-
-        updatePage();
       }
+
+      localLeftClimate.dirty = true;
+      updatePage();
   }
 }

@@ -41,6 +41,8 @@ int maxFanSpeed = 8;
 int minVentPosition = 1;
 int maxVentPosition = 6;
 
+static m5::touch_state_t prev_state;
+
 void setup() {
   auto cfg = M5.config();
 
@@ -51,7 +53,6 @@ void setup() {
 
   Wire.begin(I2C_ADDRESS);
   Wire.onRequest(sendData);
-  Wire.onReceive(receiveCommand);  
 }
 
 void loop() {
@@ -64,6 +65,7 @@ void loop() {
    */
   if (newPosition != oldPosition) {
     updateCounter();
+    updatePage();
   }
 
   /**
@@ -77,14 +79,19 @@ void loop() {
       return;
     }
 
-    page++;
+    localData.dirty = true;
+    PAGE++;
+    lastPageChange = millis();
+    updatePage();
   }
 
-  if (millis() - lastPageChange > PAGE_TIMEOUT && PAGE != 00) {
+  handleTouch();
+
+  if (millis() - lastPageChange > PAGE_TIMEOUT && PAGE != 0) {
+    localData.dirty = true;
     PAGE = 0;
+    updatePage();
   }
-  
-  updatePage();
 }
 
 void updatePage() {
@@ -105,7 +112,6 @@ void updatePage() {
     }
 
     localData.dirty = false;
-    lastPageChange = millis();
   }
 }
 
@@ -141,6 +147,7 @@ void handleTouch() {
       }
 
       localData.dirty = true;
+      updatePage();
     }
   }
 }
@@ -157,17 +164,15 @@ void updateCounter() {
       if (PAGE % 3 == 0) {
         change = (newPosition > oldPosition) ? 1 : -1;
         localData.fanSpeed = constrain(localData.fanSpeed + change, minFanSpeed, maxFanSpeed);
-        Serial.println(localData.fanSpeed);
       }
 
       if (PAGE % 3 == 1) {
         change = (newPosition > oldPosition) ? 1 : -1;
         localData.ventPosition = constrain(localData.ventPosition + change, minVentPosition, maxVentPosition);
-        Serial.println(localData.fanSpeed);
       }
     }
   }
-
+  
   oldPosition = newPosition;
 }
 
@@ -185,6 +190,13 @@ void page0() {
     M5Dial.Display.width() / 2,
     M5Dial.Display.height() / 2
   );
+  
+  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
+    M5Dial.Display.setTextSize(1);
+    M5Dial.Display.drawString(
+      "Fan Speed",
+      M5Dial.Display.width() / 2,
+      M5Dial.Display.height() / 2 + 80);
 }
 
 /**
@@ -201,6 +213,13 @@ void page1() {
     M5Dial.Display.width() / 2,
     M5Dial.Display.height() / 2
   );
+  
+  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
+    M5Dial.Display.setTextSize(1);
+    M5Dial.Display.drawString(
+      "Vents",
+      M5Dial.Display.width() / 2,
+      M5Dial.Display.height() / 2 + 80);
 }
 
 /**
@@ -208,6 +227,7 @@ void page1() {
  */
 void page2() {
   M5Dial.Display.setTextFont(&fonts::FreeMonoBold24pt7b);
+  M5Dial.Display.setTextSize(1);
 
   M5Dial.Display.setTextColor(DARKGREY);
   if (localData.front_heater) {

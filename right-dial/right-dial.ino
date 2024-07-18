@@ -77,8 +77,6 @@ long oldPosition = -999;
 long newPosition = 0;
 long lastUpdatePosition = -999;
 
-static m5::touch_state_t prev_state;
-
 void setup() {
   auto cfg = M5.config();
   M5Dial.begin(cfg, true, false);
@@ -162,12 +160,15 @@ void loop() {
 
 void broadcastClimate() {
   broadcastClimateData.rightTemp = climate.rightTemp;
+  broadcastClimateData.fanSpeed = climate.fanSpeed;
 
   Wire.beginTransmission(LEFT_SLAVE_ADDRESS);  
   Wire.write((byte *)&broadcastClimateData, sizeof(BroadcastClimateData));
   Wire.endTransmission();
 
   lastClimateBroadcast = millis();
+
+  updatePage();
 }
 
 void readSlaveMessages() {
@@ -194,7 +195,7 @@ void syncDialState() {
   climate.ventPosition = centreClimate.ventPosition;
   climate.front_heater = centreClimate.front_heater;
   climate.rear_heater = centreClimate.rear_heater;
-  climate.dual = centreClimate.dual;
+  climate.dual = leftClimate.dual;
   if (climate.dual) {
     climate.leftTemp = leftClimate.leftTemp;
   } else {
@@ -235,7 +236,9 @@ void page0() {
   /**
    * We don't show anything if the system is off
    */
+
   if (climate.fanSpeed == 0) {
+    M5Dial.Display.clear();
     return;
   }
 
