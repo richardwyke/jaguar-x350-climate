@@ -7,6 +7,7 @@
 #include <Wire.h>
 #include "M5Dial.h"
 #include <string>
+#include "images.h"
 
 /**
  * The I2C address for this dial
@@ -30,7 +31,7 @@ struct LocalData {
     bool dual;
     bool dirty;
 };
-LocalData localLeftClimate = {7, false, true};
+LocalData localLeftClimate = {8, false, true};
 
 struct BroadcastClimateData {
   int rightTemp;
@@ -38,7 +39,7 @@ struct BroadcastClimateData {
 };
 BroadcastClimateData broadcastClimate = {8, 1};
 
-int minTemp = 1;
+int minTemp = 2;
 int maxTemp = 30;
 
 long oldPosition = -999;
@@ -96,7 +97,7 @@ void updateCounter() {
       return;
     }
 
-    change = (newPosition > oldPosition) ? 2 : -2;
+    change = (newPosition > oldPosition) ? 1 : -1;
     
     if (oldPosition != -999) {
       localLeftClimate.leftTemp = constrain(localLeftClimate.leftTemp + change, minTemp, maxTemp);
@@ -119,32 +120,120 @@ void page0() {
     return;
   }
 
-  M5Dial.Display.setTextColor(ORANGE);
-  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
-  M5Dial.Display.setTextSize(2);
-
-  String displayTemp = String(16 + (localLeftClimate.leftTemp / 2));
-
   if (localLeftClimate.leftTemp == 0) {
-    displayTemp = "Lo";
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_lo);
   }
-
+  if (localLeftClimate.leftTemp == 1) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_16);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 2) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_17);
+  }
+  if (localLeftClimate.leftTemp == 3) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_17);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 4) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_18);
+  }
+  if (localLeftClimate.leftTemp == 5) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_18);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 6) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_19);
+  }
+  if (localLeftClimate.leftTemp == 7) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_19);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 8) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_20);
+  }
+  if (localLeftClimate.leftTemp == 9) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_20);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 10) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_21);
+  }
+  if (localLeftClimate.leftTemp == 11) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_21);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 12) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_22);
+  }
+  if (localLeftClimate.leftTemp == 13) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_22);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 14) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_23);
+  }
+  if (localLeftClimate.leftTemp == 15) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_23);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 16) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_24);
+  }
+  if (localLeftClimate.leftTemp == 17) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_24);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 18) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_25);
+  }
+  if (localLeftClimate.leftTemp == 19) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_25);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 20) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_26);
+  }
+  if (localLeftClimate.leftTemp == 21) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_26);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 22) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_27);
+  }
+  if (localLeftClimate.leftTemp == 23) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_27);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 24) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_28);
+  }
+  if (localLeftClimate.leftTemp == 25) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_28);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 26) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_29);
+  }
+  if (localLeftClimate.leftTemp == 27) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_29);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 28) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_30);
+  }
+  if (localLeftClimate.leftTemp == 29) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_30);
+      M5Dial.Display.drawBitmap(177,84,40,40,epd_bitmap_point_5);
+  }
+  if (localLeftClimate.leftTemp == 30) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_31);
+  }
   if (localLeftClimate.leftTemp > 30) {
-    displayTemp = "Hi";
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_hi);
   }
-
-  M5Dial.Display.drawString(
-    String(displayTemp),
-    M5Dial.Display.width() / 2,
-    M5Dial.Display.height() / 2);
 
   if (localLeftClimate.dual) {
-    M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
-    M5Dial.Display.setTextSize(1);
-    M5Dial.Display.drawString(
-      "Sync",
-      M5Dial.Display.width() / 2,
-      M5Dial.Display.height() / 2 + 80);
+    M5Dial.Display.drawBitmap(60,200,120,30,epd_bitmap_push_sync);
   }
 }
 

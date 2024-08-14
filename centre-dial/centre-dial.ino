@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include "M5Dial.h"
 #include <string>
+#include "images.h"
 
 /**
  * The I2C address for this dial
@@ -19,21 +20,22 @@ struct LocalData {
   int ventPosition;
   bool timed_recirc;
   bool defrost;
-  bool front_heater;
-  bool rear_heater;
   bool dirty;
 };
-LocalData localData = {true, 1, 1, false, false, false, false, true};
+LocalData localData = {true, 1, 6, false, false, true};
 
 // Dial position
 long oldPosition = -999;
 long newPosition = 0;
 long lastUpdatePosition = -999;
 
+bool shownStartupLogo = false;
+
 // The active page shown on the dial
 int PAGE = 0;
 int lastPageChange = 0;
 int PAGE_TIMEOUT = 10000;
+int start = 0;
 
 // Constants that define the maximum and minimum values for the dial
 int minFanSpeed = 0;
@@ -58,12 +60,18 @@ void setup() {
 void loop() {
   M5Dial.update();
 
+  if (millis() < 5000) {
+    pageLogo();
+    return;
+  }
+
   newPosition = M5Dial.Encoder.read();
 
   /*
    * Turning the encoder increments or decrements, depending on the page you're on
    */
   if (newPosition != oldPosition) {
+    lastPageChange = millis();
     updateCounter();
     updatePage();
   }
@@ -85,7 +93,9 @@ void loop() {
     updatePage();
   }
 
-  handleTouch();
+  if (PAGE == 2) {
+    handleTouch();
+  }
 
   if (millis() - lastPageChange > PAGE_TIMEOUT && PAGE != 0) {
     localData.dirty = true;
@@ -130,21 +140,9 @@ void handleTouch() {
     };
 
     if (state_name[t.state] == "none") {
+      lastPageChange = millis();
 
-      click_left = (t.x <= 120);
-      click_top = (t.y <= 120);
-
-      if (click_left && click_top) {
-        localData.front_heater = !localData.front_heater;
-      }
-
-      if (!click_left && click_top) {
-        localData.rear_heater = !localData.rear_heater;
-      }
-
-      if (click_left && !click_top) {
-        localData.timed_recirc = !localData.timed_recirc;
-      }
+      localData.defrost = !localData.defrost;
 
       localData.dirty = true;
       updatePage();
@@ -175,86 +173,79 @@ void updateCounter() {
   
   oldPosition = newPosition;
 }
+/**
+ * Fan speed
+ */
+void pageLogo() {
+  M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_jaguar_alt);
+}
 
 /**
  * Fan speed
  */
 void page0() {
-  M5Dial.Display.setTextColor(ORANGE);
-
-  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
-  M5Dial.Display.setTextSize(2);
-
-  M5Dial.Display.drawString(
-    getFanSpeedText(),
-    M5Dial.Display.width() / 2,
-    M5Dial.Display.height() / 2
-  );
-  
-  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
-    M5Dial.Display.setTextSize(1);
-    M5Dial.Display.drawString(
-      "Fan Speed",
-      M5Dial.Display.width() / 2,
-      M5Dial.Display.height() / 2 + 80);
+  if (localData.fanSpeed == 0) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_off);
+  }
+if (localData.fanSpeed == 1) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_fan_auto);
+  }
+  if (localData.fanSpeed == 2) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_fan_1);
+  }
+  if (localData.fanSpeed == 3) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_fan_2);
+  }
+  if (localData.fanSpeed == 4) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_fan_3);
+  }
+  if (localData.fanSpeed == 5) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_fan_4);
+  }
+  if (localData.fanSpeed == 6) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_fan_5);
+  }
+  if (localData.fanSpeed == 7) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_fan_6);
+  }
+  if (localData.fanSpeed == 8) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_fan_7);
+  }
 }
 
 /**
  * Vent position
  */
 void page1() {
-  M5Dial.Display.setTextColor(ORANGE);
-
-  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_32);
-  M5Dial.Display.setTextSize(2);
-
-  M5Dial.Display.drawString(
-    getVentPosition(),
-    M5Dial.Display.width() / 2,
-    M5Dial.Display.height() / 2
-  );
-  
-  M5Dial.Display.setTextFont(&fonts::Orbitron_Light_24);
-    M5Dial.Display.setTextSize(1);
-    M5Dial.Display.drawString(
-      "Vents",
-      M5Dial.Display.width() / 2,
-      M5Dial.Display.height() / 2 + 80);
+  if (localData.ventPosition == 6) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_vents_auto);
+  }
+  if (localData.ventPosition == 1) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_vents_face);
+  }
+  if (localData.ventPosition == 2) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_vents_face_feet);
+  }
+  if (localData.ventPosition == 3) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_vents_feet);
+  }
+  if (localData.ventPosition == 4) {
+      M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_vents_screen_feet);
+  }
 }
 
 /**
  * Buttons
  */
 void page2() {
-  M5Dial.Display.setTextFont(&fonts::FreeMonoBold24pt7b);
-  M5Dial.Display.setTextSize(1);
 
-  M5Dial.Display.setTextColor(DARKGREY);
-  if (localData.front_heater) {
-    M5Dial.Display.setTextColor(ORANGE);
+  if (localData.defrost) {
+    M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_defrost_on);
   }
-  M5Dial.Display.drawString(
-    "F",
-    (M5Dial.Display.width() / 4) + 20,
-    (M5Dial.Display.height() / 4) + 10);
 
-  M5Dial.Display.setTextColor(DARKGREY);
-  if (localData.rear_heater) {
-    M5Dial.Display.setTextColor(ORANGE);
+  if (!localData.defrost) {
+    M5Dial.Display.drawBitmap(0,0,240,240,epd_bitmap_defrost_off);
   }
-  M5Dial.Display.drawString(
-    "R",
-    (M5Dial.Display.width() / 4 * 3) - 20,
-    (M5Dial.Display.height() / 4) + 10);
-
-  M5Dial.Display.setTextColor(DARKGREY);
-  if (localData.timed_recirc) {
-    M5Dial.Display.setTextColor(ORANGE);
-  }
-  M5Dial.Display.drawString(
-    "RC",
-    (M5Dial.Display.width() / 4) + 20,
-    (M5Dial.Display.height() / 4 * 3) - 10);
 }
 
 String getFanSpeedText() {
